@@ -241,9 +241,7 @@ for hemisphere = 1:2
     
     output.([side(hemisphere) 'h'])(output.([side(hemisphere) 'h']) == Inf | output.([side(hemisphere) 'h']) == -Inf) = NaN;
     
-    output.lh = array2table(output.lh, 'VariableNames',{'PialArea','SmoothPialArea','PialAreaRaw','SmoothPialAreaRaw', ...
-        'AvgCortThickness','GaussCurv','K','I','S'});
-    output.rh = array2table(output.rh, 'VariableNames',{'PialArea','SmoothPialArea','PialAreaRaw','SmoothPialAreaRaw', ...
+    output.([side(hemisphere) 'h']) = array2table(output.([side(hemisphere) 'h']), 'VariableNames',{'PialArea','SmoothPialArea','PialAreaRaw','SmoothPialAreaRaw', ...
         'AvgCortThickness','GaussCurv','K','I','S'});
 end
 
