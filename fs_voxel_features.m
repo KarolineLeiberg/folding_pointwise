@@ -39,17 +39,17 @@ for hemisphere = 1:2
     [opialv,opialf] = freesurfer_read_surf([pathpre, 'h.pial-outer-smoothed']);    
     
     output.([side(hemisphere) 'h']) = zeros(length(pialv),9);
-
-    TotalArea = NaN(length(pialv_ds),1);
-    SmoothArea = NaN(length(pialv_ds),1);
-    AvgThickness = NaN(length(pialv_ds),1);
-    GaussCurv = NaN(length(pialv_ds),1);
     
     % Downsample pial surface
     [pialv_ds,pialf_ds] = meshresample(pialv,pialf,0.05);
 
     % Downsample smooth pial
     [opialv_ds, opialf_ds] = meshresample(opialv,opialf,0.1);
+
+    TotalArea = NaN(length(pialv_ds),1);
+    SmoothArea = NaN(length(pialv_ds),1);
+    AvgThickness = NaN(length(pialv_ds),1);
+    GaussCurv = NaN(length(pialv_ds),1);
     
     % Find nearest point for each point in pial (and at the same time also sphere)
     % Split into two blocks so the size of the matrix doesn't crash the
