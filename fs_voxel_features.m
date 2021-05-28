@@ -97,15 +97,15 @@ for hemisphere = 1:2
     nearest_pialds= [nearest_pialds nearest_pialds2];
     clear nearest_pialds2
     
-    % Nearest point for points in smooth pial
-    pialv_ds = single(pialv_ds);
-    d1 = pialv_ds(:,1) - opialv(:,1)';
-    d2 = pialv_ds(:,2) - opialv(:,2)';
-    d3 = pialv_ds(:,3) - opialv(:,3)';
-    d = d1.^2 + d2.^2 + d3.^2;
-    clear d1 d2 d3
-    d = sqrt(d);
-    [~,nearest_opial] = min(d);
+%     % Nearest point for points in smooth pial
+%     pialv_ds = single(pialv_ds);
+%     d1 = pialv_ds(:,1) - opialv(:,1)';
+%     d2 = pialv_ds(:,2) - opialv(:,2)';
+%     d3 = pialv_ds(:,3) - opialv(:,3)';
+%     d = d1.^2 + d2.^2 + d3.^2;
+%     clear d1 d2 d3
+%     d = sqrt(d);
+%     [~,nearest_opial] = min(d);
 
     % Nearest point for points in ds smooth pial
     d1 = pialv_ds(:,1) - opialv_ds(:,1)';
@@ -154,6 +154,101 @@ for hemisphere = 1:2
 
                 neighbourIDs = [neighbourIDs; new(d<r)];
             end
+            
+            % Label ds pial
+            label = zeros(length(pialv_ds),1);
+            label(neighbourIDs) = 1;
+            
+            % Find edges of patch
+            isBoundary = zeros(length(neighbourIDs),1);
+            for kl = 1:length(neighbourIDs)
+                fid = pialf_ds(:,1)==neighbourIDs(kl) | ...
+                      pialf_ds(:,2)==neighbourIDs(kl) | ...
+                      pialf_ds(:,3)==neighbourIDs(kl);
+
+                v_neigh = unique(pialf_ds(fid,:));
+                ncolors = numel(unique(label(v_neigh)));
+                if ncolors > 1
+                    isBoundary(kl) = 1;
+                end
+            end
+            edge = neighbourIDs(isBoundary==1);
+            
+            % Fill potential holes            
+            newPoints = edge(1);
+            points_left = 1;
+            while points_left
+                % Check we don't start with a vertex that is between a hole and the
+                % edge
+                if ismember(newPoints(1),edge)
+                    bndNeigh =  ismember(pialf_ds(:,1),newPoints(1)) | ...
+                        ismember(pialf_ds(:,2),newPoints(1)) | ...
+                        ismember(pialf_ds(:,3),newPoints(1));
+
+                    bndNeigh = unique(pialf_ds(bndNeigh,:));
+                    bndNeigh = bndNeigh(ismember(bndNeigh, neighbourIDs(isBoundary == 1)));
+                    if length(bndNeigh) > 3
+                        edge(1) = [];
+                        if isempty(edge)
+                           points_left = 0;
+                        else
+                           newPoints = edge(1);
+                        end
+                        continue
+                    end
+                end
+
+                % Find neighbours of neighbours
+                fid = ismember(pialf_ds(:,1),newPoints) | ...
+                    ismember(pialf_ds(:,2),newPoints) | ...
+                    ismember(pialf_ds(:,3),newPoints);
+
+                new = unique(pialf_ds(fid,:));
+                edge(ismember(edge,new)) = [];
+                new = setdiff(new, neighbourIDs);
+                new = setdiff(new, newPoints);
+                newPoints = [newPoints; new];
+                newPoints = setdiff(newPoints, neighbourIDs);
+                d = sqrt(sum((pialv_ds(newPoints,:)-vertex).^2,2));
+
+                if isempty(new)
+                    neighbourIDs = [neighbourIDs; newPoints];
+                    isBoundary = [isBoundary; zeros(length(newPoints),1)];
+                    if isempty(edge)
+                       points_left = 0;
+                    else
+                       newPoints = edge(1);
+                    end
+                end
+
+                if max(d) > 50
+                    % Run only on edge until no new points
+                    newEdge = 1;
+                    while ~isempty(newEdge)
+                        fid = ismember(pialf_ds(:,1),newPoints) | ...
+                            ismember(pialf_ds(:,2),newPoints) | ...
+                            ismember(pialf_ds(:,3),newPoints);
+
+                        new = unique(pialf_ds(fid,:));
+
+                        newEdge = new(ismember(new, edge));
+                        edge(ismember(edge,new)) = [];
+
+                        new = setdiff(new, neighbourIDs);
+                        new = setdiff(new, newPoints);
+                        newPoints = [newPoints; new];
+                    end
+                    if isempty(edge)
+                       points_left = 0;
+                    else
+                       newPoints = edge(1);
+                    end
+                end
+            end
+
+            % Relabel ds pial
+            label = zeros(length(pialv_ds),1);
+            label(neighbourIDs) = 1;
 
             % Total area
             % Only use area of faces that are completely within circle
@@ -166,23 +261,26 @@ for hemisphere = 1:2
 
             % Average thickness in circle
             AvgThickness(point) = sum(ThicknessFB(aid>0).*TotalAreai(aid>0))/TotalArea(point);
-
-            % Label ds pial
-            label = zeros(length(pialv_ds),1);
-            label(neighbourIDs) = 1;
             
-            % Label smooth pial
-            label_smooth = label(nearest_opial);            
-
-            % Find the smooth area
-            sids = find(label_smooth == 1);
-            [liaa] = ismember(opialf,sids);
-            aid = (sum(liaa,2) == 3);
-
-            SmoothArea(point) = sum(calcTriangleArea(opialf(aid,:),opialv));
+%             % Label smooth pial
+%             label_smooth = label(nearest_opial);            
+% 
+%             % Find the smooth area
+%             sids = find(label_smooth == 1);
+%             [liaa] = ismember(opialf,sids);
+%             aid = (sum(liaa,2) == 3);
+% 
+%             SmoothArea(point) = sum(calcTriangleArea(opialf(aid,:),opialv));
 
             % Label the ds smooth pial
             label_smooth_ds = label(nearest_opialds);
+            
+            % Find the smooth area
+            sids = find(label_smooth_ds == 1);
+            [liaa] = ismember(opialf_ds,sids);
+            aid = (sum(liaa,2) == 3);
+
+            SmoothArea(point) = sum(calcTriangleArea(opialf_ds(aid,:),opialv_ds));
 
             % Gauss. curv. of patch
             ov_ids = find(label_smooth_ds == 1);
