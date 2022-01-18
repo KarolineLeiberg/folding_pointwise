@@ -36,7 +36,8 @@ for hemisphere = 1:2
 
     [thickness, ~]  = read_curv([pathpre, 'h.thickness']);
     [pialv,pialf]   = freesurfer_read_surf([pathpre, 'h.pial']);
-    [opialv,opialf] = freesurfer_read_surf([pathpre, 'h.pial-outer-smoothed']);    
+    [opialv,opialf] = freesurfer_read_surf([pathpre, 'h.pial-outer-smoothed']);
+    [~,labelDK,~] = read_annotation([subject, '/label/', side(hemisphere), 'h.aparc.annot']);
     
     output.([side(hemisphere) 'h']) = zeros(length(pialv),9);
     
@@ -45,6 +46,8 @@ for hemisphere = 1:2
 
     % Downsample smooth pial
     [opialv_ds, opialf_ds] = meshresample(opialv,opialf,0.1);
+
+    clear opialv opialf
 
     TotalArea = NaN(length(pialv_ds),1);
     SmoothArea = NaN(length(pialv_ds),1);
@@ -96,16 +99,64 @@ for hemisphere = 1:2
     clear d
     nearest_pialds= [nearest_pialds nearest_pialds2];
     clear nearest_pialds2
+
+    % Only keep points on ds pial which are ot on the CC
+    label_ds = labelDK(nearest_pialds);
+    pialf_ds = pialf_ds((label_ds(pialf_ds(:,1)) ~= 0) & (label_ds(pialf_ds(:,2)) ~= 0) & ...
+        (label_ds(pialf_ds(:,3)) ~= 0),:);
+
+    % Points over which to iterate
+    usepoints = unique(pialf_ds);
     
-%     % Nearest point for points in smooth pial
-%     pialv_ds = single(pialv_ds);
-%     d1 = pialv_ds(:,1) - opialv(:,1)';
-%     d2 = pialv_ds(:,2) - opialv(:,2)';
-%     d3 = pialv_ds(:,3) - opialv(:,3)';
-%     d = d1.^2 + d2.^2 + d3.^2;
-%     clear d1 d2 d3
-%     d = sqrt(d);
-%     [~,nearest_opial] = min(d);
+    % Label the opial_ds with DK
+    % for each point on ds opial the point in pial that is
+    % nearest
+    d1 = pialv(:,1) - opialv_ds(1:floor(size(opialv_ds,1)/4),1)';
+    d2 = pialv(:,2) - opialv_ds(1:floor(size(opialv_ds,1)/4),2)';
+    d3 = pialv(:,3) - opialv_ds(1:floor(size(opialv_ds,1)/4),3)';
+    d = d1.^2 + d2.^2 + d3.^2;
+    clear d1 d2 d3
+    d = sqrt(d);
+    [~,nearest_opialds] = min(d);
+    clear d
+    
+    d1 = pialv(:,1) - opialv_ds((floor(size(opialv_ds,1)/4)+1):(floor(size(opialv_ds,1)*2/4)),1)';
+    d2 = pialv(:,2) - opialv_ds((floor(size(opialv_ds,1)/4)+1):(floor(size(opialv_ds,1)*2/4)),2)';
+    d3 = pialv(:,3) - opialv_ds((floor(size(opialv_ds,1)/4)+1):(floor(size(opialv_ds,1)*2/4)),3)';
+    d = d1.^2 + d2.^2 + d3.^2;
+    clear d1 d2 d3
+    d = sqrt(d);
+    [~,nearest_opialds2] = min(d);
+    clear d
+    nearest_opialds= [nearest_opialds nearest_opialds2];
+    clear nearest_opialds2
+    
+    d1 = pialv(:,1) - opialv_ds((floor(size(opialv_ds,1)*2/4)+1):(floor(size(opialv_ds,1)*3/4)),1)';
+    d2 = pialv(:,2) - opialv_ds((floor(size(opialv_ds,1)*2/4)+1):(floor(size(opialv_ds,1)*3/4)),2)';
+    d3 = pialv(:,3) - opialv_ds((floor(size(opialv_ds,1)*2/4)+1):(floor(size(opialv_ds,1)*3/4)),3)';
+    d = d1.^2 + d2.^2 + d3.^2;
+    clear d1 d2 d3
+    d = sqrt(d);
+    [~,nearest_opialds2] = min(d);
+    clear d
+    nearest_opialds= [nearest_opialds nearest_opialds2];
+    clear nearest_opialds2
+    
+    d1 = pialv(:,1) - opialv_ds((floor(size(opialv_ds,1)*3/4)+1):end,1)';
+    d2 = pialv(:,2) - opialv_ds((floor(size(opialv_ds,1)*3/4)+1):end,2)';
+    d3 = pialv(:,3) - opialv_ds((floor(size(opialv_ds,1)*3/4)+1):end,3)';
+    d = d1.^2 + d2.^2 + d3.^2;
+    clear d1 d2 d3
+    d = sqrt(d);
+    [~,nearest_opialds2] = min(d);
+    clear d
+    nearest_opialds= [nearest_opialds nearest_opialds2];
+    clear nearest_opialds2
+
+    % Only keep point on ds opial which are not on the CC
+    label_ods = labelDK(nearest_opialds);
+    opialf_ds = opialf_ds((label_ods(opialf_ds(:,1)) ~= 0) & (label_ods(opialf_ds(:,2)) ~= 0) & ...
+        (label_ods(opialf_ds(:,3)) ~= 0),:);
 
     % Nearest point for points in ds smooth pial
     d1 = pialv_ds(:,1) - opialv_ds(:,1)';
@@ -119,15 +170,39 @@ for hemisphere = 1:2
 
     % Find thickness of vertices of pial closest to each ds vertex
     thickness_ds = thickness(nearest_pialds);
+    thickness_ds_smoothed = NaN(length(pialv_ds),1);
+
+    % Smoothing thickness across verices (only used to exclude points)
+    for index = 1:length(usepoints)
+        point = usepoints(index);
+        neighbourIDs = point;
+        vertex = pialv_ds(neighbourIDs,:);
+        rmin = 0;
+        while rmin < 25
+            % Find neighbours of neighbours
+            fid = ismember(pialf_ds(:,1),neighbourIDs) | ...
+                ismember(pialf_ds(:,2),neighbourIDs) | ...
+                ismember(pialf_ds(:,3),neighbourIDs);
+
+            new = setdiff(unique(pialf_ds(fid,:)), neighbourIDs);
+            d = sqrt(sum((pialv_ds(new,:)-vertex).^2,2));
+            rmin = min(d);
+            new = new(:);
+            neighbourIDs = [neighbourIDs; new];
+        end
+        thickness_ds_smoothed(point) = mean(thickness_ds(neighbourIDs), 'omitnan');
+    end
 
     % Thickness of faces in ds pial
     ThicknessFB = makeFacebased(thickness_ds, pialf_ds);
     
-    for point = 1:length(pialv_ds)
+    for index = 1:length(usepoints)
+
+        point = usepoints(index);
 
         % Check if it is on the midline or if the thickness is too small
         % (for healthy adults)
-        if thickness_ds(point) < 1.8 || abs(pialv_ds(point,1)) < 10
+        if thickness_ds_smoothed(point) < 1.8 || label_ds(point) == 0
             continue;
         else
 
@@ -151,6 +226,7 @@ for hemisphere = 1:2
                 new = setdiff(unique(pialf_ds(fid,:)), neighbourIDs);
                 d = sqrt(sum((pialv_ds(new,:)-vertex).^2,2));
                 rmin = min(d);
+                new = new(:);
 
                 neighbourIDs = [neighbourIDs; new(d<r)];
             end
@@ -175,73 +251,77 @@ for hemisphere = 1:2
             edge = neighbourIDs(isBoundary==1);
             
             % Fill potential holes            
-            newPoints = edge(1);
-            points_left = 1;
-            while points_left
-                % Check we don't start with a vertex that is between a hole and the
-                % edge
-                if ismember(newPoints(1),edge)
-                    bndNeigh =  ismember(pialf_ds(:,1),newPoints(1)) | ...
-                        ismember(pialf_ds(:,2),newPoints(1)) | ...
-                        ismember(pialf_ds(:,3),newPoints(1));
+            if ~isempty(edge)
+                newPoints = edge(1);
+                points_left = 1;
+                while points_left
+                    % Check we don't start with a vertex that is between a hole and the
+                    % edge
+                    if ismember(newPoints(1),edge)
+                        bndNeigh =  ismember(pialf_ds(:,1),newPoints(1)) | ...
+                            ismember(pialf_ds(:,2),newPoints(1)) | ...
+                            ismember(pialf_ds(:,3),newPoints(1));
 
-                    bndNeigh = unique(pialf_ds(bndNeigh,:));
-                    bndNeigh = bndNeigh(ismember(bndNeigh, neighbourIDs(isBoundary == 1)));
-                    if length(bndNeigh) > 3
-                        edge(1) = [];
+                        bndNeigh = unique(pialf_ds(bndNeigh,:));
+                        bndNeigh = bndNeigh(ismember(bndNeigh, neighbourIDs(isBoundary == 1)));
+                        if length(bndNeigh) > 3
+                            edge(1) = [];
+                            if isempty(edge)
+                               points_left = 0;
+                            else
+                               newPoints = edge(1);
+                            end
+                            continue
+                        end
+                    end
+
+                    % Find neighbours of neighbours
+                    fid = ismember(pialf_ds(:,1),newPoints) | ...
+                        ismember(pialf_ds(:,2),newPoints) | ...
+                        ismember(pialf_ds(:,3),newPoints);
+
+                    new = unique(pialf_ds(fid,:));
+                    edge(ismember(edge,new)) = [];
+                    new = setdiff(new, neighbourIDs);
+                    new = setdiff(new, newPoints);
+                    new = new(:);
+                    newPoints = [newPoints; new];
+                    newPoints = setdiff(newPoints, neighbourIDs);
+                    d = sqrt(sum((pialv_ds(newPoints,:)-vertex).^2,2));
+
+                    if isempty(new)
+                        neighbourIDs = [neighbourIDs; newPoints];
+                        isBoundary = [isBoundary; zeros(length(newPoints),1)];
                         if isempty(edge)
                            points_left = 0;
                         else
                            newPoints = edge(1);
                         end
-                        continue
                     end
-                end
 
-                % Find neighbours of neighbours
-                fid = ismember(pialf_ds(:,1),newPoints) | ...
-                    ismember(pialf_ds(:,2),newPoints) | ...
-                    ismember(pialf_ds(:,3),newPoints);
+                    if max(d) > 50
+                        % Run only on edge until no new points
+                        newEdge = 1;
+                        while ~isempty(newEdge)
+                            fid = ismember(pialf_ds(:,1),newPoints) | ...
+                                ismember(pialf_ds(:,2),newPoints) | ...
+                                ismember(pialf_ds(:,3),newPoints);
 
-                new = unique(pialf_ds(fid,:));
-                edge(ismember(edge,new)) = [];
-                new = setdiff(new, neighbourIDs);
-                new = setdiff(new, newPoints);
-                newPoints = [newPoints; new];
-                newPoints = setdiff(newPoints, neighbourIDs);
-                d = sqrt(sum((pialv_ds(newPoints,:)-vertex).^2,2));
+                            new = unique(pialf_ds(fid,:));
 
-                if isempty(new)
-                    neighbourIDs = [neighbourIDs; newPoints];
-                    isBoundary = [isBoundary; zeros(length(newPoints),1)];
-                    if isempty(edge)
-                       points_left = 0;
-                    else
-                       newPoints = edge(1);
-                    end
-                end
+                            newEdge = new(ismember(new, edge));
+                            edge(ismember(edge,new)) = [];
 
-                if max(d) > 50
-                    % Run only on edge until no new points
-                    newEdge = 1;
-                    while ~isempty(newEdge)
-                        fid = ismember(pialf_ds(:,1),newPoints) | ...
-                            ismember(pialf_ds(:,2),newPoints) | ...
-                            ismember(pialf_ds(:,3),newPoints);
-
-                        new = unique(pialf_ds(fid,:));
-
-                        newEdge = new(ismember(new, edge));
-                        edge(ismember(edge,new)) = [];
-
-                        new = setdiff(new, neighbourIDs);
-                        new = setdiff(new, newPoints);
-                        newPoints = [newPoints; new];
-                    end
-                    if isempty(edge)
-                       points_left = 0;
-                    else
-                       newPoints = edge(1);
+                            new = setdiff(new, neighbourIDs);
+                            new = setdiff(new, newPoints);
+                            new = new(:);
+                            newPoints = [newPoints; new];
+                        end
+                        if isempty(edge)
+                           points_left = 0;
+                        else
+                           newPoints = edge(1);
+                        end
                     end
                 end
             end
