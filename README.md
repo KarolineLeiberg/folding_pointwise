@@ -18,3 +18,5 @@ The input of the function is the path to a subject's FreeSurfer folder. The meth
 The output is saved in the 'surf' folder.
 
 It also needs the MATLAB libraries [CorticalFoldingAnalysisTools](https://github.com/cnnp-lab/CorticalFoldingAnalysisTools) and [iso2mesh](http://iso2mesh.sourceforge.net).
+
+The script runs on MATLAB versions starting with R2016b. If you are using older versions, please contact K.Leiberg2@newcastle.ac.uk for a script compatible with pre-R2016b MATLAB.
