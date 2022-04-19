@@ -1,10 +1,12 @@
-function [output] = fs_voxel_features(subject, libdir, iso2meshdir)
+function [output] = fs_voxel_features(subject, libdir, iso2meshdir, radius)
 %
 % Input:
 % - subject: char, path to FreeSurfer folder
 % - libdir: char, path to lib-folder: https://github.com/cnnp-lab/CorticalFoldingAnalysisTools/tree/master/lib
 % - iso2meshdir: char, path to ISO2MESH libaray: http://iso2mesh.sourceforge.net/
 %   Licence: CC-BY
+% - radius: spherical radius which defindes patch around each point on
+%   cortex
 %
 % Output: table for each hemisphere, contains values at each point on the
 % pial surface
@@ -27,7 +29,7 @@ side = 'lr';
 output = struct;
 
 % Spherical radius around point (mm)
-r = 25;
+% radius = 25;
 
 for hemisphere = 1:2
 
@@ -37,12 +39,15 @@ for hemisphere = 1:2
     [thickness, ~]  = read_curv([pathpre, 'h.thickness']);
     [pialv,pialf]   = freesurfer_read_surf([pathpre, 'h.pial']);
     [opialv,opialf] = freesurfer_read_surf([pathpre, 'h.pial-outer-smoothed']);
+    [midv,midf] = freesurfer_read_surf([pathpre, 'h.mid']);
     [~,labelDK,~] = read_annotation([subject, '/label/', side(hemisphere), 'h.aparc.annot']);
     
     output.([side(hemisphere) 'h']) = zeros(length(pialv),9);
     
-    % Downsample pial surface
-    [pialv_ds,pialf_ds] = meshresample(pialv,pialf,0.05);
+    % Downsample pial surface and find nearest point on pial for each point on ds pial
+    [midv_ds,pialf_ds] = meshresample(midv,midf,0.05); % pialf_ds = midf_ds
+    pialv = single(pialv);
+    [label_ds,pialv_ds,~,nearest_pialds]=matchSurfLabel_mid2pial(labelDK,pialv,midv,midv_ds);
 
     % Downsample smooth pial
     [opialv_ds, opialf_ds] = meshresample(opialv,opialf,0.1);
@@ -54,22 +59,22 @@ for hemisphere = 1:2
     AvgThickness = NaN(length(pialv_ds),1);
     GaussCurv = NaN(length(pialv_ds),1);
     
-    % Find nearest point for each point in pial (and at the same time also sphere)
+    % Find nearest point for each point in mid (and at the same time also sphere)
     % Split into two blocks so the size of the matrix doesn't crash the
     % memory
-    pialv_ds = single(pialv_ds);
-    d1 = pialv_ds(:,1) - pialv(1:floor(size(pialv,1)/2),1)';
-    d2 = pialv_ds(:,2) - pialv(1:floor(size(pialv,1)/2),2)';
-    d3 = pialv_ds(:,3) - pialv(1:floor(size(pialv,1)/2),3)';
+    midv = single(midv);
+    d1 = midv_ds(:,1) - midv(1:floor(size(midv,1)/2),1)';
+    d2 = midv_ds(:,2) - midv(1:floor(size(midv,1)/2),2)';
+    d3 = midv_ds(:,3) - midv(1:floor(size(midv,1)/2),3)';
     d = d1.^2 + d2.^2 + d3.^2;
     clear d1 d2 d3
     d = sqrt(d);
     [~,nearest_sphere] = min(d);
     clear d
     
-    d1 = pialv_ds(:,1) - pialv((floor(size(pialv,1)/2)+1):end,1)';
-    d2 = pialv_ds(:,2) - pialv((floor(size(pialv,1)/2)+1):end,2)';
-    d3 = pialv_ds(:,3) - pialv((floor(size(pialv,1)/2)+1):end,3)';
+    d1 = midv_ds(:,1) - midv((floor(size(midv,1)/2)+1):end,1)';
+    d2 = midv_ds(:,2) - midv((floor(size(midv,1)/2)+1):end,2)';
+    d3 = midv_ds(:,3) - midv((floor(size(midv,1)/2)+1):end,3)';
     d = d1.^2 + d2.^2 + d3.^2;
     clear d1 d2 d3
     d = sqrt(d);
@@ -78,30 +83,8 @@ for hemisphere = 1:2
     nearest_sphere = [nearest_sphere nearest_sphere2];
     clear nearest_sphere2
     
-    % Other way around (for each point on ds pial the point in pial that is
-    % nearest)
-    d1 = pialv(:,1) - pialv_ds(1:floor(size(pialv_ds,1)/2),1)';
-    d2 = pialv(:,2) - pialv_ds(1:floor(size(pialv_ds,1)/2),2)';
-    d3 = pialv(:,3) - pialv_ds(1:floor(size(pialv_ds,1)/2),3)';
-    d = d1.^2 + d2.^2 + d3.^2;
-    clear d1 d2 d3
-    d = sqrt(d);
-    [~,nearest_pialds] = min(d);
-    clear d
-    
-    d1 = pialv(:,1) - pialv_ds((floor(size(pialv_ds,1)/2)+1):end,1)';
-    d2 = pialv(:,2) - pialv_ds((floor(size(pialv_ds,1)/2)+1):end,2)';
-    d3 = pialv(:,3) - pialv_ds((floor(size(pialv_ds,1)/2)+1):end,3)';
-    d = d1.^2 + d2.^2 + d3.^2;
-    clear d1 d2 d3
-    d = sqrt(d);
-    [~,nearest_pialds2] = min(d);
-    clear d
-    nearest_pialds= [nearest_pialds nearest_pialds2];
-    clear nearest_pialds2
 
     % Only keep points on ds pial which are ot on the CC
-    label_ds = labelDK(nearest_pialds);
     pialf_ds = pialf_ds((label_ds(pialf_ds(:,1)) ~= 0) & (label_ds(pialf_ds(:,2)) ~= 0) & ...
         (label_ds(pialf_ds(:,3)) ~= 0),:);
 
@@ -178,7 +161,7 @@ for hemisphere = 1:2
         neighbourIDs = point;
         vertex = pialv_ds(neighbourIDs,:);
         rmin = 0;
-        while rmin < 25
+        while rmin < radius
             % Find neighbours of neighbours
             fid = ismember(pialf_ds(:,1),neighbourIDs) | ...
                 ismember(pialf_ds(:,2),neighbourIDs) | ...
@@ -214,7 +197,7 @@ for hemisphere = 1:2
 
             % Repeat until new neighbours are all > r mm from the point
             rmin = 0;
-            while rmin < r
+            while rmin < radius
 
                 % Find neighbours of neighbours
                 fid = ismember(pialf_ds(:,1),neighbourIDs) | ...
@@ -228,7 +211,7 @@ for hemisphere = 1:2
                 rmin = min(d);
                 new = new(:);
 
-                neighbourIDs = [neighbourIDs; new(d<r)];
+                neighbourIDs = [neighbourIDs; new(d<radius)];
             end
             
             % Label ds pial
@@ -257,7 +240,8 @@ for hemisphere = 1:2
                 while points_left
                     % Check we don't start with a vertex that is between a hole and the
                     % edge
-                    if ismember(newPoints(1),edge)
+                    on_edge = ismember(newPoints(1),edge);
+                    while on_edge
                         bndNeigh =  ismember(pialf_ds(:,1),newPoints(1)) | ...
                             ismember(pialf_ds(:,2),newPoints(1)) | ...
                             ismember(pialf_ds(:,3),newPoints(1));
@@ -268,10 +252,12 @@ for hemisphere = 1:2
                             edge(1) = [];
                             if isempty(edge)
                                points_left = 0;
+                               on_edge = 0;
                             else
                                newPoints = edge(1);
                             end
-                            continue
+                        else
+                            on_edge = 0;
                         end
                     end
 
@@ -282,8 +268,7 @@ for hemisphere = 1:2
 
                     new = unique(pialf_ds(fid,:));
                     edge(ismember(edge,new)) = [];
-                    new = setdiff(new, neighbourIDs);
-                    new = setdiff(new, newPoints);
+                    new = setdiff(new, [neighbourIDs; newPoints]);
                     new = new(:);
                     newPoints = [newPoints; new];
                     newPoints = setdiff(newPoints, neighbourIDs);
@@ -297,9 +282,7 @@ for hemisphere = 1:2
                         else
                            newPoints = edge(1);
                         end
-                    end
-
-                    if max(d) > 50
+                    elseif max(d) > 50
                         % Run only on edge until no new points
                         newEdge = 1;
                         while ~isempty(newEdge)
@@ -312,8 +295,7 @@ for hemisphere = 1:2
                             newEdge = new(ismember(new, edge));
                             edge(ismember(edge,new)) = [];
 
-                            new = setdiff(new, neighbourIDs);
-                            new = setdiff(new, newPoints);
+                            new = setdiff(new, [neighbourIDs; newPoints]);
                             new = new(:);
                             newPoints = [newPoints; new];
                         end
@@ -342,16 +324,6 @@ for hemisphere = 1:2
             % Average thickness in circle
             AvgThickness(point) = sum(ThicknessFB(aid>0).*TotalAreai(aid>0))/TotalArea(point);
             
-%             % Label smooth pial
-%             label_smooth = label(nearest_opial);            
-% 
-%             % Find the smooth area
-%             sids = find(label_smooth == 1);
-%             [liaa] = ismember(opialf,sids);
-%             aid = (sum(liaa,2) == 3);
-% 
-%             SmoothArea(point) = sum(calcTriangleArea(opialf(aid,:),opialv));
-
             % Label the ds smooth pial
             label_smooth_ds = label(nearest_opialds);
             
@@ -398,6 +370,12 @@ for hemisphere = 1:2
     % Set values where CH GC is below 0.16 to NaN
     At_dash(GaussCurv < 0.16) = NaN;
     Ae_dash(GaussCurv < 0.16) = NaN;
+
+    % A0 = T^2/k^4
+    % Use for correcting surface areas for between-subject-analysis
+    A0 = Ae_dash.^5./At_dash.^4;
+    At_dash = At_dash./A0;
+    Ae_dash = Ae_dash./A0;
     
     K = log10(At_dash) - 5/4*log10(Ae_dash) + ...
         1/2*log10(AvgThickness);
