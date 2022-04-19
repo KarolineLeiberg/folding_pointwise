@@ -13,8 +13,8 @@ The current version excludes points located on the midline or in the insula.
 
 ## Input and dependencies
 
-The input of the function is the path to a subject's FreeSurfer folder. The method requires the FreeSurfer files ?h.pial, ?h.thickness, and ?h.pial-outer-smoothed 
-(see the [FreeSurfer lGI website](https://surfer.nmr.mgh.harvard.edu/fswiki/LGI)).
+The input of the function is the path to a subject's FreeSurfer folder. The method requires the FreeSurfer files ?h.pial, ?h.thickness, ?h.pial-outer-smoothed 
+(see the [FreeSurfer lGI website](https://surfer.nmr.mgh.harvard.edu/fswiki/LGI)), and an expansion of the ?h.white surface by 0.5 saved as ?h.mid (using FreeSurfer ```mris_expand -thickness ?h.white 0.5 ?h.mid```).
 The output is saved in the 'surf' folder.
 
 It also needs the MATLAB libraries [CorticalFoldingAnalysisTools](https://github.com/cnnp-lab/CorticalFoldingAnalysisTools) and [iso2mesh](http://iso2mesh.sourceforge.net).
