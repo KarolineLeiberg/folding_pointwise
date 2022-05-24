@@ -19,6 +19,7 @@ function [output] = fs_voxel_features(subject, libdir, iso2meshdir, radius)
 % - K
 % - I
 % - S
+% - A0 = T^2/k^4 = Ae^5/At^4
 
 addpath(libdir)
 addpath([libdir '/FSmatlab/'])
@@ -372,10 +373,7 @@ for hemisphere = 1:2
     Ae_dash(GaussCurv < 0.16) = NaN;
 
     % A0 = T^2/k^4
-    % Use for correcting surface areas for between-subject-analysis
     A0 = Ae_dash.^5./At_dash.^4;
-    At_dash = At_dash./A0;
-    Ae_dash = Ae_dash./A0;
     
     K = log10(At_dash) - 5/4*log10(Ae_dash) + ...
         1/2*log10(AvgThickness);
@@ -394,11 +392,12 @@ for hemisphere = 1:2
     output.([side(hemisphere) 'h'])(:,7) = K(nearest_sphere);
     output.([side(hemisphere) 'h'])(:,8) = I(nearest_sphere);
     output.([side(hemisphere) 'h'])(:,9) = S(nearest_sphere);
+    output.([side(hemisphere) 'h'])(:,10) = A0(nearest_sphere);
     
     output.([side(hemisphere) 'h'])(output.([side(hemisphere) 'h']) == Inf | output.([side(hemisphere) 'h']) == -Inf) = NaN;
     
     output.([side(hemisphere) 'h']) = array2table(output.([side(hemisphere) 'h']), 'VariableNames',{'PialArea','SmoothPialArea','PialAreaRaw','SmoothPialAreaRaw', ...
-        'AvgCortThickness','GaussCurv','K','I','S'});
+        'AvgCortThickness','GaussCurv','K','I','S', 'Azero'});
 end
 
 % Write to file
