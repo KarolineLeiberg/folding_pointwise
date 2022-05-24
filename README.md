@@ -9,7 +9,7 @@ exposed surface area, and integrated Gaussian curvature in small regions around 
 It corrects the surface area measures using the curvature and then computes the new morphological variables K, I, and S.
 The method enables the near-pointwise analysis of cortical folding.
 
-The current version excludes points located on the midline or in the insula.
+The current version excludes points located on the corpus callosum or in the insula.
 
 ## Input and dependencies
 
